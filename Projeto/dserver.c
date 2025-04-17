@@ -10,12 +10,46 @@
 #include "program.h"
 
 #define fifoName "myfifo"
+#define DATA_FILE "meta_info.txt"
 char fifo_resposta[64];
 
-
-MetaInfo documentos[MAX_DOCS];
 int next_id = 1;
+MetaInfo documentos[MAX_DOCS];
 int num_documentos = 0;
+
+void guardar_meta_info(MetaInfo* documentos, int total) {
+    FILE *fp = fopen(DATA_FILE, "w");
+    if (!fp) {
+        perror("Erro ao guardar meta-informação");
+        return;
+    }
+
+    for (int i = 0; i < total; i++) {
+        fprintf(fp, "%s|%s|%s|%s|%s\n",
+            documentos[i].id,
+            documentos[i].title,
+            documentos[i].authors,
+            documentos[i].year,
+            documentos[i].path);
+    }
+
+    fclose(fp);
+}
+
+int id_existe(const char* id) {
+    for (int i = 0; i < num_documentos; i++) {
+        if (strcmp(documentos[i].id, id) == 0) {
+            return 1; // já existe
+        }
+    }
+    return 0;
+}
+
+void gerar_id_unico(char* id_buffer) {
+    do {
+        snprintf(id_buffer, MAX_ID, "doc%d", next_id++);
+    } while (id_existe(id_buffer));
+}
 
 void add(char* buffer) {
     int fifo;
@@ -23,8 +57,7 @@ void add(char* buffer) {
     char resposta[560];
 
     // Gerar ID automaticamente (pode ser substituído por algo mais complexo)
-    snprintf(m.id, MAX_ID, "doc%d", next_id++);
-    printf("%s\n\n", buffer);
+    gerar_id_unico(m.id);
     // Parsing do buffer (esperado: "ADD|title|authors|year|path")
     char* token = strtok(buffer, "|"); // token = "ADD" (ignoramos)
 
@@ -58,11 +91,14 @@ void add(char* buffer) {
             "Ano: %s\n"
             "Caminho: %s\n\n", m.id, m.title, m.authors, m.year, m.path);
     
+
     write(fifo, resposta, strlen(resposta));
     
     close(fifo);
+
     if(num_documentos < MAX_DOCS){
         documentos[num_documentos++] = m;
+        guardar_meta_info(documentos, num_documentos);
     }
 }
 
@@ -120,6 +156,7 @@ void delete(char *buffer) {
                 documentos[j] = documentos[j + 1];
             }
             num_documentos--;
+            guardar_meta_info(documentos, num_documentos);
             snprintf(resposta, sizeof(resposta), "Documento com ID %s removido com sucesso.\n\n", token);
             write(fifo, resposta, strlen(resposta));
     
@@ -156,7 +193,7 @@ void count(char* buffer){
                 _exit(1); // grep falhou
             }
 
-            wait(NULL);
+            wait(&status);
 
             if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
                 // Palavra existe → contar linhas
@@ -284,6 +321,29 @@ void list(char* buffer) {
     close(fifo);
 }
 
+int saida(){
+    if (unlink(fifoName) == -1) {
+        perror("Erro ao remover o FIFO");
+    } else {
+        printf("FIFO removido com sucesso.\n");
+    }
+
+    printf("Servidor a fechar");
+    fflush(stdout);
+    sleep(1);
+    printf(".");
+    fflush(stdout);
+    sleep(1);
+    printf(".");
+    fflush(stdout);
+    sleep(1);
+    printf(".\n\n");
+    sleep(1);
+
+    printf("Servidor fechado com sucesso.\n");
+    exit(0);
+}
+
 void verifica_comandos(char* buffer) {
 
     // Verifica se é o comando '-a'
@@ -311,7 +371,11 @@ void verifica_comandos(char* buffer) {
         printf("Comando para listar documentos detetado.\n");
         list(buffer);
     }
-    // Verificar se o comando
+    // Verificar se é o comando '-f'
+    else if (strstr(buffer, "Fechar") != NULL){
+        printf("Comando para fechar servidor detetado.\n");
+        saida();
+    }
     else {
         printf("Comando não reconhecido: %s\n", buffer);
     }
@@ -352,15 +416,23 @@ void fifo(){
     }
 }
 
-void cleanup(int sig) {
-    unlink(fifoName);
-    printf("\nServidor terminou. FIFO removido.\n");
-    exit(0);
+void carregar_meta_info() {
+    FILE *fp = fopen(DATA_FILE, "r");
+    if (!fp) return; // Se ainda não existir, continua sem erro
+
+    char linha[512];
+    while (fgets(linha, sizeof(linha), fp)) {
+        MetaInfo d;
+        sscanf(linha, "%[^|]|%[^|]|%[^|]|%[^|]|%[^\n]",
+            d.id, d.title, d.authors, d.year, d.path);
+        documentos[num_documentos++] = d;
+    }
+
+    fclose(fp);
 }
 
 int main() {
-    // Registar handler para CTRL+C (SIGINT)
-    signal(SIGINT, cleanup);
+    carregar_meta_info();
     fifo();
     return 0;
 }

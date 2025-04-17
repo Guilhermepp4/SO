@@ -20,4 +20,3 @@ typedef struct MetaInfo{
     char path[MAX_PATH];
 
 } MetaInfo;
-

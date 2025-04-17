@@ -76,9 +76,21 @@ int ler_comandos(int argc, char** argv){
         // mensagem = "Consulta|Word|Limite|fifo_name"
         sprintf(mensagem, "ListDocs|%s|%s|%s\n", argv[2], argv[3], fifo_resposta);
     }
+
+    // Se for o comando "-f"
+    else if (strcmp(argv[1], "-f") == 0 && argc == 2){
+        sprintf(mensagem, "Fechar");
+        if (unlink(fifo_resposta) == -1) {
+            perror("Erro ao remover o FIFO");
+        } else {
+            printf("FIFO removido com sucesso.\n");
+        }
+    }
     fifo(mensagem);
     return 1;
 }
+
+
 
 int main(int argc, char** argv){
     int fd;

@@ -12,7 +12,7 @@ run_client_a:
 	./dclient -a "Hobbit" "Guilherme; Oliver; Zeca" "1937" "files/file1.txt"
 
 run_client_a2:
-	./dclient -a "Livro" "Guilherme; Oliver; Zeca" "1937" "files/file2.txt"
+	./dclient -a "Livro" "Guilherme; Oliver; Zeca" "1937" "files/file3.txt"
 
 run_client_c:
 	./dclient -c "doc1"
@@ -25,6 +25,9 @@ run_client_l:
 
 run_client_s:
 	./dclient -s "Hello" 2
+
+run_client_f:
+	./dclient -f
 
 clean:
 	rm -f -r *.dSYM fifo* dserver dclient *.o

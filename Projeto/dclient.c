@@ -26,71 +26,87 @@ int fifo(char *mensagem){
     return 1;
 }
 
+void construir_mensagem_add(char* mensagem, char** argv) {
+    sprintf(mensagem, "ADD|%s|%s|%s|%s|%s\n",
+            argv[2], argv[3], argv[4], argv[5], fifo_resposta);
+}
+
+void construir_mensagem_consulta(char* mensagem, char** argv) {
+    sprintf(mensagem, "Consulta|%s|%s\n", argv[2], fifo_resposta);
+}
+
+void construir_mensagem_remove(char* mensagem, char** argv) {
+    sprintf(mensagem, "Remove|%s|%s\n", argv[2], fifo_resposta);
+}
+
+void construir_mensagem_numero_linhas(char* mensagem, char** argv) {
+    sprintf(mensagem, "NumberLines|%s|%s|%s\n", argv[2], argv[3], fifo_resposta);
+}
+
+void construir_mensagem_listar(char* mensagem, char** argv) {
+    sprintf(mensagem, "ListDocs|%s|%s|%s\n", argv[2], argv[3], fifo_resposta);
+}
+
+void construir_mensagem_fechar(char* mensagem) {
+    sprintf(mensagem, "Fechar");
+    if (unlink(fifo_resposta) == -1) {
+        perror("Erro ao remover o FIFO");
+    } else {
+        printf("FIFO removido com sucesso.\n");
+    }
+}
+
 int ler_comandos(int argc, char** argv){
     char mensagem[512];
-
-    sprintf(fifo_resposta, "/tmp/cliente_%d_fifo", getpid());
-    
-    if (mkfifo(fifo_resposta, 0666) == -1 && errno != EEXIST) {
-        perror("Erro ao criar o FIFO"); 
-        return -1; 
-    }
     
     if(argc < 2){
         printf("Erro na escrita de comandos!!\n");
         return -1;
     }
+
+    sprintf(fifo_resposta, "/tmp/cliente_%d_fifo", getpid());
+    if (mkfifo(fifo_resposta, 0666) == -1 && errno != EEXIST) {
+        perror("Erro ao criar o FIFO"); 
+        return -1; 
+    }
+    
     // Se for o comando "-a"
     if (strcmp(argv[1], "-a") == 0 && argc == 6) {
         // mensagem = "ADD|title|authors|year|path"
-        sprintf(mensagem, "ADD|%s|%s|%s|%s|%s\n",
-                argv[2],      // title
-                argv[3],      // authors
-                argv[4],      // year
-                argv[5],
-                fifo_resposta);     // path
+        construir_mensagem_add(mensagem, argv);
     }
-    
     // Se for o comando "-c"
     else if (strcmp(argv[1], "-c") == 0 && argc == 3) {
         // mensagem = "Consulta|Documento"
-        sprintf(mensagem, "Consulta|%s|%s\n",argv[2], fifo_resposta);
+        construir_mensagem_consulta(mensagem, argv);
     }
     // Se for o comando "-d"
     else if (strcmp(argv[1], "-d") == 0 && argc == 3){
         // mensagem = "Remove|Documento"
-        sprintf(mensagem, "Remove|%s|%s\n", argv[2], fifo_resposta);
-    }    
-
+        construir_mensagem_remove(mensagem, argv);
+    }
     // Se for o comando "-l"
     else if (strcmp(argv[1], "-l") == 0 && argc == 4){
         // mensagem = "NumberLines|Documento|Word"
-        sprintf(mensagem, "NumberLines|%s|%s|%s\n",
-                argv[2],
-                argv[3],
-                fifo_resposta);
+        construir_mensagem_numero_linhas(mensagem, argv);
     }
-
     // Se for o comando "-s"
     else if (strcmp(argv[1], "-s") == 0 && argc == 4){
-        // mensagem = "Consulta|Word|Limite|fifo_name"
-        sprintf(mensagem, "ListDocs|%s|%s|%s\n", argv[2], argv[3], fifo_resposta);
+        // mensagem = "ListDocs|Word|Limite|Fifo_name"
+        construir_mensagem_listar(mensagem, argv);
     }
-
     // Se for o comando "-f"
     else if (strcmp(argv[1], "-f") == 0 && argc == 2){
-        sprintf(mensagem, "Fechar");
-        if (unlink(fifo_resposta) == -1) {
-            perror("Erro ao remover o FIFO");
-        } else {
-            printf("FIFO removido com sucesso.\n");
-        }
+        // mensagem = "Fechar"
+        construir_mensagem_fechar(mensagem);
+    }
+    else{
+        printf("Comando inválido!!\n");
+        return -1;
     }
     fifo(mensagem);
     return 1;
 }
-
-
 
 int main(int argc, char** argv){
     int fd;

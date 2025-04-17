@@ -23,7 +23,6 @@ void guardar_meta_info(MetaInfo* documentos, int total) {
         perror("Erro ao guardar meta-informação");
         return;
     }
-
     for (int i = 0; i < total; i++) {
         fprintf(fp, "%s|%s|%s|%s|%s\n",
             documentos[i].id,
@@ -32,7 +31,6 @@ void guardar_meta_info(MetaInfo* documentos, int total) {
             documentos[i].year,
             documentos[i].path);
     }
-
     fclose(fp);
 }
 

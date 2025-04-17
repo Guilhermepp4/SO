@@ -10,15 +10,25 @@
 #include "program.h"
 
 #define fifoName "myfifo"
-#define fifoName2 "myfifo2"
+<<<<<<< HEAD
 char fifo_resposta[64];
+
+=======
+#define fifoName2 "myfifo2"
+>>>>>>> origin/main
 
 MetaInfo documentos[MAX_DOCS];
 int next_id = 1;
 int num_documentos = 0;
 
 void add(char* buffer) {
+<<<<<<< HEAD
+    int fifo;
     MetaInfo m;
+    char resposta[560];
+=======
+    MetaInfo m;
+>>>>>>> origin/main
 
     // Gerar ID automaticamente (pode ser substituído por algo mais complexo)
     snprintf(m.id, MAX_ID, "doc%d", next_id++);
@@ -40,6 +50,27 @@ void add(char* buffer) {
 
     token = strtok(NULL, "|"); // path
     if (token != NULL) strncpy(m.path, token, MAX_PATH);
+<<<<<<< HEAD
+    
+    token = strtok(NULL, "|"); // fifo_resposta
+    
+    if((fifo = open(token, O_WRONLY)) == -1){
+        perror("Erro ao abrir o fifo da reposta para escrever\n");
+        return;
+    }
+    
+    snprintf(resposta,sizeof(resposta), 
+            "Documento indexado com sucesso:\n" 
+            "ID: %s\n"
+            "Título: %s\n"
+            "Autores: %s\n"
+            "Ano: %s\n"
+            "Caminho: %s\n\n", m.id, m.title, m.authors, m.year, m.path);
+    
+    write(fifo, resposta, strlen(resposta));
+    
+    close(fifo);
+=======
 
     printf("Documento indexado com sucesso:\n");
     printf("ID: %s\n", m.id);
@@ -48,6 +79,7 @@ void add(char* buffer) {
     printf("Ano: %s\n", m.year);
     printf("Caminho: %s\n\n", m.path);
 
+>>>>>>> origin/main
     if(num_documentos < MAX_DOCS){
         documentos[num_documentos++] = m;
     }
@@ -160,7 +192,11 @@ void list(char* buffer) {
     int max_procs = (limite_str != NULL) ? atoi(limite_str) : 1;
     int active_procs = 0;
 
+<<<<<<< HEAD
     if((fifo = open(fifo_resposta, O_WRONLY)) == -1){
+=======
+    if((fifo = open(fifoName2, O_WRONLY)) == -1){
+>>>>>>> origin/main
         perror("Erro ao abrir o fifo para escrever\n");
         return;
     }
@@ -254,11 +290,14 @@ void verifica_comandos(char* buffer) {
 }
 
 void fifo(){
+<<<<<<< HEAD
+
     if (mkfifo(fifoName, 0666) == -1 && errno != EEXIST) {
         perror("Erro ao criar o FIFO"); 
         return; 
     }
-
+=======
+>>>>>>> origin/main
     printf("Servidor a correr. À espera de pedidos...\n");
     while (1) {
         int fd;
@@ -283,14 +322,29 @@ void fifo(){
             }
         }
 
+<<<<<<< HEAD
         verifica_comandos(buffer);
         close(fd);
+=======
+        close(fd);
+
+        if (mkfifo(fifoName2, 0666) == -1 && errno != EEXIST) {
+            perror("Erro ao criar o FIFO"); 
+            return; 
+        }
+
+        verifica_comandos(buffer);
+        
+>>>>>>> origin/main
     }
 }
 
 void cleanup(int sig) {
     unlink(fifoName);
+<<<<<<< HEAD
+=======
     unlink(fifoName2);
+>>>>>>> origin/main
     printf("\nServidor terminou. FIFO removido.\n");
     exit(0);
 }

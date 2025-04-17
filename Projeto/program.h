@@ -11,6 +11,10 @@
 #define MAX_ID       20
 #define MAX_DOCS    100
 
+<<<<<<< HEAD
+
+=======
+>>>>>>> origin/main
 typedef struct MetaInfo{
 
     char id[MAX_ID];
@@ -19,4 +23,9 @@ typedef struct MetaInfo{
     char year[MAX_YEAR];
     char path[MAX_PATH];
 
+<<<<<<< HEAD
 } MetaInfo;
+
+=======
+} MetaInfo;
+>>>>>>> origin/main

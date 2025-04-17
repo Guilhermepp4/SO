@@ -11,6 +11,7 @@
 
 #define fifoName "myfifo"
 #define fifoName2 "myfifo2"
+char fifo_resposta[64];
 
 MetaInfo documentos[MAX_DOCS];
 int next_id = 1;
@@ -159,7 +160,7 @@ void list(char* buffer) {
     int max_procs = (limite_str != NULL) ? atoi(limite_str) : 1;
     int active_procs = 0;
 
-    if((fifo = open(fifoName2, O_WRONLY)) == -1){
+    if((fifo = open(fifo_resposta, O_WRONLY)) == -1){
         perror("Erro ao abrir o fifo para escrever\n");
         return;
     }
@@ -253,6 +254,11 @@ void verifica_comandos(char* buffer) {
 }
 
 void fifo(){
+    if (mkfifo(fifoName, 0666) == -1 && errno != EEXIST) {
+        perror("Erro ao criar o FIFO"); 
+        return; 
+    }
+
     printf("Servidor a correr. À espera de pedidos...\n");
     while (1) {
         int fd;
@@ -277,15 +283,8 @@ void fifo(){
             }
         }
 
-        close(fd);
-
-        if (mkfifo(fifoName2, 0666) == -1 && errno != EEXIST) {
-            perror("Erro ao criar o FIFO"); 
-            return; 
-        }
-
         verifica_comandos(buffer);
-        
+        close(fd);
     }
 }
 

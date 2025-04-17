@@ -8,10 +8,8 @@
 #include <fcntl.h>
 
 #define fifoName "myfifo"
-#define fifoName2 "myfifo2"
 
 char fifo_resposta[64];
-
 int fifo(char *mensagem){
     int fd;
     sprintf(fifo_resposta, "/tmp/cliente_%d_fifo", getpid());
@@ -83,7 +81,7 @@ int main(int argc, char** argv){
     char buffer[512];
 
     ler_comandos(argc, argv);
-    fd = open(fifoName, O_RDONLY);
+    fd = open(fifo_resposta, O_RDONLY);
     while((bytes_lidos = read(fd, buffer, 512)) > 0){
         // Escreve os dados lidos no FIFO para a saída padrão (descritor 1)
         if(write(1, buffer, bytes_lidos) == -1) return -1;

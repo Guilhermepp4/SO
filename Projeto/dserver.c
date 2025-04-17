@@ -10,25 +10,17 @@
 #include "program.h"
 
 #define fifoName "myfifo"
-<<<<<<< HEAD
 char fifo_resposta[64];
 
-=======
-#define fifoName2 "myfifo2"
->>>>>>> origin/main
 
 MetaInfo documentos[MAX_DOCS];
 int next_id = 1;
 int num_documentos = 0;
 
 void add(char* buffer) {
-<<<<<<< HEAD
     int fifo;
     MetaInfo m;
     char resposta[560];
-=======
-    MetaInfo m;
->>>>>>> origin/main
 
     // Gerar ID automaticamente (pode ser substituído por algo mais complexo)
     snprintf(m.id, MAX_ID, "doc%d", next_id++);
@@ -50,7 +42,6 @@ void add(char* buffer) {
 
     token = strtok(NULL, "|"); // path
     if (token != NULL) strncpy(m.path, token, MAX_PATH);
-<<<<<<< HEAD
     
     token = strtok(NULL, "|"); // fifo_resposta
     
@@ -70,33 +61,38 @@ void add(char* buffer) {
     write(fifo, resposta, strlen(resposta));
     
     close(fifo);
-=======
-
-    printf("Documento indexado com sucesso:\n");
-    printf("ID: %s\n", m.id);
-    printf("Título: %s\n", m.title);
-    printf("Autores: %s\n", m.authors);
-    printf("Ano: %s\n", m.year);
-    printf("Caminho: %s\n\n", m.path);
-
->>>>>>> origin/main
     if(num_documentos < MAX_DOCS){
         documentos[num_documentos++] = m;
     }
 }
 
 void consult(char* buffer){
+    char resposta[600];
     char* token = strtok(buffer, "|"); // token = "Consult" (ignoramos)
     token = strtok(NULL, "|"); // ID
+    char* fifo_resposta = strtok(NULL, "|"); // token = "Consult" (ignoramos)
+    int fifo;
+    
+    if((fifo = open(fifo_resposta, O_WRONLY)) == -1){
+        perror("Erro ao abrir o fifo da reposta para escrever\n");
+        return;
+    }
+
     for(int i = 0; i < num_documentos; i++){
         if(strcmp(token, documentos[i].id) == 0){
+            snprintf(resposta,sizeof(resposta), 
+            "Aqui está a meta informação do documento com o ID %s\n" 
+            "ID: %s\n"
+            "Título: %s\n"
+            "Autores: %s\n"
+            "Ano: %s\n"
+            "Caminho: %s\n\n", token, documentos[i].id, 
+            documentos[i].title, documentos[i].authors
+            , documentos[i].year, documentos[i].path);
 
-            printf("Aqui está a meta informação do documento com o ID %s\n", token);
-            printf("ID: %s\n", documentos[i].id);
-            printf("Título: %s\n", documentos[i].title);
-            printf("Autores: %s\n", documentos[i].authors);
-            printf("Ano: %s\n", documentos[i].year);
-            printf("Caminho: %s\n\n", documentos[i].path);
+            write(fifo, resposta, strlen(resposta));
+    
+            close(fifo);
             return;
         }
     }
@@ -105,8 +101,16 @@ void consult(char* buffer){
 }
 
 void delete(char *buffer) {
+    char resposta[560];
+    int fifo;
     char* token = strtok(buffer, "|"); // token = "Remove" (ignoramos)
     token = strtok(NULL, "|"); // ID
+    char* fifo_resposta = strtok(NULL, "|"); // token = "Remove" (ignoramos)
+
+    if((fifo = open(fifo_resposta, O_WRONLY)) == -1){
+        perror("Erro ao abrir o fifo da reposta para escrever\n");
+        return;
+    }
 
     // Verificar e remover o documento com o ID
     for (int i = 0; i < num_documentos; i++) {
@@ -116,18 +120,31 @@ void delete(char *buffer) {
                 documentos[j] = documentos[j + 1];
             }
             num_documentos--;
-            printf("Documento com ID %s removido com sucesso.\n\n", token);
+            snprintf(resposta, sizeof(resposta), "Documento com ID %s removido com sucesso.\n\n", token);
+            write(fifo, resposta, strlen(resposta));
+    
+            close(fifo);
             return;
         }
     }
-    printf("Documento com ID %s não encontrado.\n\n", token);
+    snprintf(resposta, sizeof(resposta), "Documento com ID %s não encontrado.\n\n", token);
+    write(fifo, resposta, strlen(resposta));
+    
+    close(fifo);
 }
 
 void count(char* buffer){
+    char resposta[560];
     char* token = strtok(buffer, "|"); // Ignora "Numero de Linhas"
     token = strtok(NULL, "|");  // ID do documento
     char* palavra = strtok(NULL, "|"); // Palavra a procurar
+    char* fifo_resposta = strtok(NULL, "|");
+    int fifo;
 
+    if((fifo = open(fifo_resposta, O_WRONLY)) == -1){
+        perror("Erro ao abrir o fifo da reposta para escrever\n");
+        return;
+    }
     for (int i = 0; i < num_documentos; i++) {
         if (strcmp(documentos[i].id, token) == 0) {
             // Primeiro, verifica se a palavra existe
@@ -167,40 +184,49 @@ void count(char* buffer){
                     ssize_t n = read(fd[0], output, sizeof(output));
                     if (n > 0) {
                         output[n-1] = '\0';
-                        printf("Documento com ID %s tem %s linhas.\n", token, output);
+                        snprintf(resposta, sizeof(resposta), "Documento com ID %s tem %s linhas.\n", token, output);
+                        write(fifo, resposta, strlen(resposta));
+    
+                        close(fifo);
                     }
                     close(fd[0]);
                     wait(NULL);
                 }
             } else {
-                printf("Palavra '%s' não encontrada no documento com ID %s.\n", palavra, token);
+                snprintf(resposta, sizeof(resposta), "Palavra '%s' não encontrada no documento com ID %s.\n", palavra, token);
+                write(fifo, resposta, strlen(resposta));
+    
+                close(fifo);
             }
 
             return;
         }
     }
-    printf("Documento com ID %s não encontrado.\n", token);
+    snprintf(resposta, sizeof(resposta), "Documento com ID %s não encontrado.\n", token);
+    write(fifo, resposta, strlen(resposta));
+    
+    close(fifo);
+            
 }
 
 
 void list(char* buffer) {
     int fifo;
+    char resposta[560];
     char* token = strtok(buffer, "|"); // Ignora "ListDocs"
     token = strtok(NULL, "|");
     char* limite_str = strtok(NULL, "|");
+    char* fifo_resposta = strtok(NULL, "|");
 
     int max_procs = (limite_str != NULL) ? atoi(limite_str) : 1;
     int active_procs = 0;
 
-<<<<<<< HEAD
     if((fifo = open(fifo_resposta, O_WRONLY)) == -1){
-=======
-    if((fifo = open(fifoName2, O_WRONLY)) == -1){
->>>>>>> origin/main
         perror("Erro ao abrir o fifo para escrever\n");
         return;
     }
-
+    snprintf(resposta, sizeof(resposta), "Lista de Documentos que contem a palavra %s\n\n", token);
+    write(fifo, resposta, strlen(resposta));
     for (int i = 0; i < num_documentos; i++) {
         int fd[2];
         if (pipe(fd) == -1) {
@@ -242,7 +268,8 @@ void list(char* buffer) {
                 buffer_saida[n] = '\0';
                 int ocorrencias = atoi(buffer_saida);
                 if (ocorrencias > 0) {
-                    write(fifo, documentos[i].id, strlen(documentos[i].id) + 1);
+                    snprintf(resposta, sizeof(resposta), "%s\n", documentos[i].id);
+                    write(fifo, resposta, strlen(resposta));
                 }
             }
             close(fd[0]);
@@ -254,8 +281,8 @@ void list(char* buffer) {
         wait(NULL);
         active_procs--;
     }
+    close(fifo);
 }
-
 
 void verifica_comandos(char* buffer) {
 
@@ -284,20 +311,18 @@ void verifica_comandos(char* buffer) {
         printf("Comando para listar documentos detetado.\n");
         list(buffer);
     }
+    // Verificar se o comando
     else {
         printf("Comando não reconhecido: %s\n", buffer);
     }
 }
 
 void fifo(){
-<<<<<<< HEAD
 
     if (mkfifo(fifoName, 0666) == -1 && errno != EEXIST) {
         perror("Erro ao criar o FIFO"); 
         return; 
     }
-=======
->>>>>>> origin/main
     printf("Servidor a correr. À espera de pedidos...\n");
     while (1) {
         int fd;
@@ -322,29 +347,13 @@ void fifo(){
             }
         }
 
-<<<<<<< HEAD
         verifica_comandos(buffer);
         close(fd);
-=======
-        close(fd);
-
-        if (mkfifo(fifoName2, 0666) == -1 && errno != EEXIST) {
-            perror("Erro ao criar o FIFO"); 
-            return; 
-        }
-
-        verifica_comandos(buffer);
-        
->>>>>>> origin/main
     }
 }
 
 void cleanup(int sig) {
     unlink(fifoName);
-<<<<<<< HEAD
-=======
-    unlink(fifoName2);
->>>>>>> origin/main
     printf("\nServidor terminou. FIFO removido.\n");
     exit(0);
 }

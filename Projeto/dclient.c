@@ -116,10 +116,12 @@ int main(int argc, char** argv){
     ler_comandos(argc, argv);
 
     fd = open(fifo_resposta, O_RDONLY);
+
     while((bytes_lidos = read(fd, buffer, 512)) > 0){
         // Escreve os dados lidos no FIFO para a saída padrão (descritor 1)
         if(write(1, buffer, bytes_lidos) == -1) return -1;
     }
+    unlink(fifo_resposta);
     close(fd);
     return 0;
 }

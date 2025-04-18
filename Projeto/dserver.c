@@ -16,6 +16,7 @@ char fifo_resposta[64];
 int next_id = 1;
 MetaInfo documentos[MAX_DOCS];
 int num_documentos = 0;
+int active_procs = 0;
 
 void guardar_meta_info(MetaInfo* documentos, int total) {
     FILE *fp = fopen(DATA_FILE, "w");
@@ -49,6 +50,7 @@ void gerar_id_unico(char* id_buffer) {
     } while (id_existe(id_buffer));
 }
 
+//Comando "-a"
 void add(char* buffer) {
     int fifo;
     MetaInfo m;
@@ -100,6 +102,7 @@ void add(char* buffer) {
     }
 }
 
+//Comando "-c"
 void consult(char* buffer){
     char resposta[600];
     char* token = strtok(buffer, "|"); // token = "Consult" (ignoramos)
@@ -134,6 +137,7 @@ void consult(char* buffer){
     printf("Tente com um ID diferente\n\n");
 }
 
+//Comando "-d"
 void delete(char *buffer) {
     char resposta[560];
     int fifo;
@@ -168,6 +172,7 @@ void delete(char *buffer) {
     close(fifo);
 }
 
+//Comando "-l"
 void count(char* buffer){
     char resposta[560];
     char* token = strtok(buffer, "|"); // Ignora "Numero de Linhas"
@@ -188,6 +193,7 @@ void count(char* buffer){
 
             if (grep_pid == 0) {
                 execlp("grep", "grep", "-q", palavra, documentos[i].path, NULL);
+                perror("grep falhou");
                 _exit(1); // grep falhou
             }
 
@@ -216,7 +222,7 @@ void count(char* buffer){
                 } else {
                     close(fd[1]);
                     char output[128];
-                    ssize_t n = read(fd[0], output, sizeof(output));
+                    int n = read(fd[0], output, sizeof(output));
                     if (n > 0) {
                         output[n-1] = '\0';
                         snprintf(resposta, sizeof(resposta), "Documento com ID %s tem %s linhas.\n", token, output);
@@ -232,19 +238,18 @@ void count(char* buffer){
                 write(fifo, resposta, strlen(resposta));
     
                 close(fifo);
+                wait(NULL);
             }
-
             return;
         }
     }
     snprintf(resposta, sizeof(resposta), "Documento com ID %s não encontrado.\n", token);
     write(fifo, resposta, strlen(resposta));
     
-    close(fifo);
-            
+    close(fifo); 
 }
 
-
+//Comando "-s"
 void list(char* buffer) {
     int fifo;
     char resposta[560];
@@ -253,8 +258,7 @@ void list(char* buffer) {
     char* limite_str = strtok(NULL, "|");
     char* fifo_resposta = strtok(NULL, "|");
 
-    int max_procs = (limite_str != NULL) ? atoi(limite_str) : 1;
-    int active_procs = 0;
+    int max_procs = atoi(limite_str);
 
     if((fifo = open(fifo_resposta, O_WRONLY)) == -1){
         perror("Erro ao abrir o fifo para escrever\n");
@@ -273,10 +277,11 @@ void list(char* buffer) {
 
         if (pid == -1) {
             perror("Erro no fork");
-            continue;
+            return;
         }
 
         if (pid == 0) {
+            sleep(2);
             // Processo filho
             close(fd[0]);
             dup2(fd[1], STDOUT_FILENO);
@@ -294,7 +299,6 @@ void list(char* buffer) {
                 wait(NULL); // Espera 1 processo terminar
                 active_procs--;
             }
-            
 
             close(fd[1]);
             char buffer_saida[128];

@@ -47,3 +47,4 @@ hplip:x:127:7:HPLIP system user,,,:/run/hplip:/bin/false
 gdm:x:128:134:Gnome Display Manager:/var/lib/gdm3:/bin/false
 guilherme:x:1000:1000:Guilherme,,,:/home/guilherme:/bin/bash
 nvidia-persistenced:x:129:137:NVIDIA Persistence Daemon,,,:/nonexistent:/usr/sbin/nologin
+epmd:x:130:138::/run/epmd:/usr/sbin/nologin

@@ -16,7 +16,6 @@ char fifo_resposta[64];
 int next_id = 1;
 MetaInfo documentos[MAX_DOCS];
 int num_documentos = 0;
-int active_procs = 0;
 
 void guardar_meta_info(MetaInfo* documentos, int total) {
     FILE *fp = fopen(DATA_FILE, "w");
@@ -173,7 +172,7 @@ void delete(char *buffer) {
 }
 
 //Comando "-l"
-void count(char* buffer){
+void count(char* buffer, int argc, char** argv){
     char resposta[560];
     char* token = strtok(buffer, "|"); // Ignora "Numero de Linhas"
     token = strtok(NULL, "|");  // ID do documento
@@ -192,7 +191,7 @@ void count(char* buffer){
             int status;
 
             if (grep_pid == 0) {
-                execlp("grep", "grep", "-q", palavra, documentos[i].path, NULL);
+                execlp("grep", "grep", "-q", palavra, "%s/%s", argv[1], documentos[i].path, NULL);
                 perror("grep falhou");
                 _exit(1); // grep falhou
             }
@@ -250,7 +249,7 @@ void count(char* buffer){
 }
 
 //Comando "-s"
-void list(char* buffer) {
+void list(char* buffer, int argc, char** argv) {
     int fifo;
     char resposta[560];
     char* token = strtok(buffer, "|"); // Ignora "ListDocs"
@@ -259,14 +258,23 @@ void list(char* buffer) {
     char* fifo_resposta = strtok(NULL, "|");
 
     int max_procs = atoi(limite_str);
+    int in_flight = 0;
 
     if((fifo = open(fifo_resposta, O_WRONLY)) == -1){
         perror("Erro ao abrir o fifo para escrever\n");
         return;
     }
-    snprintf(resposta, sizeof(resposta), "Lista de Documentos que contem a palavra %s\n\n", token);
+
+    snprintf(resposta, sizeof(resposta), "Lista de Documentos que contêm a palavra %s\n\n", token);
     write(fifo, resposta, strlen(resposta));
+
     for (int i = 0; i < num_documentos; i++) {
+        // Se já atingimos o número máximo de processos, espera por um
+        if (in_flight >= max_procs) {
+            wait(NULL);
+            in_flight--;
+        }
+
         int fd[2];
         if (pipe(fd) == -1) {
             perror("Erro ao criar pipe");
@@ -274,35 +282,32 @@ void list(char* buffer) {
         }
 
         pid_t pid = fork();
-
         if (pid == -1) {
             perror("Erro no fork");
-            return;
+            close(fd[0]);
+            close(fd[1]);
+            continue;
         }
 
         if (pid == 0) {
-            sleep(2);
             // Processo filho
             close(fd[0]);
             dup2(fd[1], STDOUT_FILENO);
             close(fd[1]);
 
             char comando[256];
-            snprintf(comando, sizeof(comando), "grep -o '%s' '%s' | wc -l", token, documentos[i].path);
+            snprintf(comando, sizeof(comando), "grep -o '%s' '%s/%s' | wc -l", token, argv[1],documentos[i].path);
             execlp("sh", "sh", "-c", comando, NULL);
-            _exit(1);
+            _exit(1); // Se execlp falhar
         } else {
             // Processo pai
-            active_procs++;
-
-            if (active_procs >= max_procs) {
-                wait(NULL); // Espera 1 processo terminar
-                active_procs--;
-            }
-
+            in_flight++;
             close(fd[1]);
+
             char buffer_saida[128];
             int n = read(fd[0], buffer_saida, sizeof(buffer_saida) - 1);
+            close(fd[0]);
+
             if (n > 0) {
                 buffer_saida[n] = '\0';
                 int ocorrencias = atoi(buffer_saida);
@@ -311,17 +316,16 @@ void list(char* buffer) {
                     write(fifo, resposta, strlen(resposta));
                 }
             }
-            close(fd[0]);
         }
     }
-
-    // Esperar por todos os restantes processos
-    while (active_procs > 0) {
+    // Espera pelos processos restantes
+    while (in_flight > 0) {
         wait(NULL);
-        active_procs--;
+        in_flight--;
     }
     close(fifo);
 }
+
 
 int saida(){
     if (unlink(fifoName) == -1) {
@@ -329,7 +333,6 @@ int saida(){
     } else {
         printf("FIFO removido com sucesso.\n");
     }
-
     printf("Servidor a fechar");
     fflush(stdout);
     sleep(1);
@@ -346,7 +349,7 @@ int saida(){
     exit(0);
 }
 
-void verifica_comandos(char* buffer) {
+void verifica_comandos(char* buffer, int argc, char** argv) {
 
     // Verifica se é o comando '-a'
     if (strstr(buffer, "ADD") != NULL) {
@@ -366,12 +369,12 @@ void verifica_comandos(char* buffer) {
     // Verifica se é o comando '-l' 
     else if (strstr(buffer, "NumberLines") != NULL) {
         printf("Comando para contar linhas detetado.\n");
-        count(buffer);
+        count(buffer, argc, argv);
     }
     // Verifica se é o comando '-s' 
     else if (strstr(buffer, "ListDocs") != NULL) {
         printf("Comando para listar documentos detetado.\n");
-        list(buffer);
+        list(buffer, argc, argv);
     }
     // Verificar se é o comando '-f'
     else if (strstr(buffer, "Fechar") != NULL){
@@ -383,7 +386,7 @@ void verifica_comandos(char* buffer) {
     }
 }
 
-void fifo(){
+void fifo(int argc, char** argv){
 
     if (mkfifo(fifoName, 0666) == -1 && errno != EEXIST) {
         perror("Erro ao criar o FIFO"); 
@@ -413,7 +416,7 @@ void fifo(){
             }
         }
 
-        verifica_comandos(buffer);
+        verifica_comandos(buffer, argc, argv);
         close(fd);
     }
 }
@@ -433,8 +436,8 @@ void carregar_meta_info() {
     fclose(fp);
 }
 
-int main() {
+int main(int argc, char** argv) {
     carregar_meta_info();
-    fifo();
+    fifo(argc, argv);
     return 0;
 }

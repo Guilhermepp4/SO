@@ -6,13 +6,13 @@ all:
 	$(CC) $(CFLAGS) dserver.c -o dserver	
 
 run_server: 
-	./dserver	
+	./dserver "files"
 
 run_client_a:
-	./dclient -a "Hobbit" "Guilherme; Oliver; Zeca" "1937" "files/file1.txt"
+	./dclient -a "Hobbit" "Guilherme; Oliver; Zeca" "1937" "file1.txt"
 
 run_client_a2:
-	./dclient -a "Livro" "Guilherme; Oliver; Zeca" "1937" "files/file3.txt"
+	./dclient -a "Livro" "Guilherme; Oliver; Zeca" "1937" "file3.txt"
 
 run_client_c:
 	./dclient -c "doc1"

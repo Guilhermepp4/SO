@@ -174,78 +174,78 @@ void delete(char *buffer) {
 //Comando "-l"
 void count(char* buffer, int argc, char** argv){
     char resposta[560];
-    char* token = strtok(buffer, "|"); // Ignora "Numero de Linhas"
-    token = strtok(NULL, "|");  // ID do documento
+    char* documento = strtok(buffer, "|"); // Ignora NumberLines
+    documento = strtok(NULL, "|"); // Documento
     char* palavra = strtok(NULL, "|"); // Palavra a procurar
-    char* fifo_resposta = strtok(NULL, "|");
+    char* fifo_resposta = strtok(NULL, "|"); // FIFO de resposta
+    char caminho[512];
     int fifo;
 
     if((fifo = open(fifo_resposta, O_WRONLY)) == -1){
-        perror("Erro ao abrir o fifo da reposta para escrever\n");
+        perror("Erro ao abrir o fifo para escrever\n");
         return;
     }
-    for (int i = 0; i < num_documentos; i++) {
-        if (strcmp(documentos[i].id, token) == 0) {
-            // Primeiro, verifica se a palavra existe
-            pid_t grep_pid = fork();
-            int status;
 
-            if (grep_pid == 0) {
-                execlp("grep", "grep", "-q", palavra, "%s/%s", argv[1], documentos[i].path, NULL);
+    for(int i = 0; i < num_documentos; i++){
+        // Verifica se o ID do documento corresponde
+        if(strcmp(documento, documentos[i].id) == 0){
+            snprintf(caminho, sizeof(caminho), "%s/%s", argv[1], documentos[i].path);
+
+            int status_grep;            
+            pid_t grep_pid = fork();
+            if(grep_pid == 0){
+                execlp("grep", "grep", "-q", palavra, caminho, NULL);
+
                 perror("grep falhou");
-                _exit(1); // grep falhou
+                _exit(1);
             }
 
-            wait(&status);
+            waitpid(grep_pid, &status_grep, 0);
 
-            if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-                // Palavra existe → contar linhas
-                int fd[2];
-                if (pipe(fd) == -1) {
+            if (WIFEXITED(status_grep) && WEXITSTATUS(status_grep) == 0) {
+
+                int pipe_wc[2];
+                if (pipe(pipe_wc) == -1) {
                     perror("pipe");
                     return;
                 }
 
                 pid_t wc_pid = fork();
-                if (wc_pid == 0) {
-                    close(fd[0]);
-                    dup2(fd[1], STDOUT_FILENO);
-                    close(fd[1]);
+                int status_wc;
+                if(wc_pid == 0){
+                    close(pipe_wc[0]);
+                    dup2(pipe_wc[1], STDOUT_FILENO);
+                    close(pipe_wc[1]);
 
-                    char comando[256];
-                    snprintf(comando, sizeof(comando), "wc -l < %s", documentos[i].path);
-                    execlp("sh", "sh", "-c", comando, NULL);
-
+                    execlp("wc", "wc", "-l", caminho, NULL);
                     perror("wc falhou");
+
                     _exit(1);
-                } else {
-                    close(fd[1]);
-                    char output[128];
-                    int n = read(fd[0], output, sizeof(output));
-                    if (n > 0) {
-                        output[n-1] = '\0';
-                        snprintf(resposta, sizeof(resposta), "Documento com ID %s tem %s linhas.\n", token, output);
-                        write(fifo, resposta, strlen(resposta));
-    
-                        close(fifo);
-                    }
-                    close(fd[0]);
-                    wait(NULL);
                 }
+                // Processo pai
+                close(pipe_wc[1]); // Fechar escrita
+                char output[128];
+                int n = read(pipe_wc[0], output, sizeof(output) - 1);
+                if (n > 0) {
+                    output[n] = '\0';
+                    char* linhas = strtok(output, " \t\n");
+                    snprintf(resposta, sizeof(resposta), "O documento com ID %s tem %s linhas.\n", documento, linhas);
+                    write(fifo, resposta, strlen(resposta));
+                }
+                close(pipe_wc[0]);
+                waitpid(wc_pid, &status_wc, 0);
             } else {
-                snprintf(resposta, sizeof(resposta), "Palavra '%s' não encontrada no documento com ID %s.\n", palavra, token);
+                snprintf(resposta, sizeof(resposta), "Não foi encontrada a palavra %s no documento %s\n", palavra, documento);
                 write(fifo, resposta, strlen(resposta));
-    
-                close(fifo);
-                wait(NULL);
             }
-            return;
+
+            close(fifo);
+            return;   
         }
     }
-    snprintf(resposta, sizeof(resposta), "Documento com ID %s não encontrado.\n", token);
+    snprintf(resposta, sizeof(resposta), "Documento com ID %s não encontrado.\n", documento);
     write(fifo, resposta, strlen(resposta));
-    
-    close(fifo); 
+    close(fifo);
 }
 
 //Comando "-s"
@@ -260,7 +260,7 @@ void list(char* buffer, int argc, char** argv) {
     int max_procs = atoi(limite_str);
     int in_flight = 0;
 
-    if((fifo = open(fifo_resposta, O_WRONLY)) == -1){
+    if ((fifo = open(fifo_resposta, O_WRONLY)) == -1) {
         perror("Erro ao abrir o fifo para escrever\n");
         return;
     }
@@ -269,60 +269,75 @@ void list(char* buffer, int argc, char** argv) {
     write(fifo, resposta, strlen(resposta));
 
     for (int i = 0; i < num_documentos; i++) {
-        // Se já atingimos o número máximo de processos, espera por um
         if (in_flight >= max_procs) {
             wait(NULL);
             in_flight--;
         }
 
-        int fd[2];
-        if (pipe(fd) == -1) {
-            perror("Erro ao criar pipe");
+        int pipe_grep[2], pipe_wc[2];
+        if (pipe(pipe_grep) == -1 || pipe(pipe_wc) == -1) {
+            perror("Erro ao criar pipes");
             continue;
         }
 
-        pid_t pid = fork();
-        if (pid == -1) {
-            perror("Erro no fork");
-            close(fd[0]);
-            close(fd[1]);
-            continue;
+        pid_t pid_grep = fork();
+        if (pid_grep == 0) {
+            // Filho grep
+            close(pipe_grep[0]);                
+            dup2(pipe_grep[1], STDOUT_FILENO);  
+            close(pipe_grep[1]);
+
+            char caminho[512];
+            snprintf(caminho, sizeof(caminho), "%s/%s", argv[1], documentos[i].path);
+            execlp("grep", "grep", "-o", token, caminho, NULL);
+            perror("grep falhou");
+            _exit(1);
         }
 
-        if (pid == 0) {
-            // Processo filho
-            close(fd[0]);
-            dup2(fd[1], STDOUT_FILENO);
-            close(fd[1]);
+        pid_t pid_wc = fork();
+        if (pid_wc == 0) {
+            // Filho wc
+            close(pipe_grep[1]);                
+            dup2(pipe_grep[0], STDIN_FILENO);   
+            close(pipe_grep[0]);
 
-            char comando[256];
-            snprintf(comando, sizeof(comando), "grep -o '%s' '%s/%s' | wc -l", token, argv[1],documentos[i].path);
-            execlp("sh", "sh", "-c", comando, NULL);
-            _exit(1); // Se execlp falhar
-        } else {
-            // Processo pai
-            in_flight++;
-            close(fd[1]);
+            close(pipe_wc[0]);               
+            dup2(pipe_wc[1], STDOUT_FILENO);    
+            close(pipe_wc[1]);
 
-            char buffer_saida[128];
-            int n = read(fd[0], buffer_saida, sizeof(buffer_saida) - 1);
-            close(fd[0]);
+            execlp("wc", "wc", "-l", NULL);
+            perror("wc falhou");
+            _exit(1);
+        }
 
-            if (n > 0) {
-                buffer_saida[n] = '\0';
-                int ocorrencias = atoi(buffer_saida);
-                if (ocorrencias > 0) {
-                    snprintf(resposta, sizeof(resposta), "%s\n", documentos[i].id);
-                    write(fifo, resposta, strlen(resposta));
-                }
+        // Pai
+        in_flight++;
+        close(pipe_grep[0]);
+        close(pipe_grep[1]);
+        close(pipe_wc[1]);
+
+        char resultado[64];
+        int n = read(pipe_wc[0], resultado, sizeof(resultado) - 1);
+        close(pipe_wc[0]);
+
+        waitpid(pid_grep, NULL, 0);
+        waitpid(pid_wc, NULL, 0);
+
+        if (n > 0) {
+            resultado[n] = '\0';
+            int ocorrencias = atoi(resultado);
+            if (ocorrencias > 0) {
+                snprintf(resposta, sizeof(resposta), "%s\n", documentos[i].id);
+                write(fifo, resposta, strlen(resposta));
             }
         }
     }
-    // Espera pelos processos restantes
+
     while (in_flight > 0) {
         wait(NULL);
         in_flight--;
     }
+
     close(fifo);
 }
 

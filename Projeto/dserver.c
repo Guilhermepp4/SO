@@ -341,7 +341,7 @@ void list(char* buffer, int argc, char** argv) {
     close(fifo);
 }
 
-
+//Comando "-f"
 int saida(){
     if (unlink(fifoName) == -1) {
         perror("Erro ao remover o FIFO");
